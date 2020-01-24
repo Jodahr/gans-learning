@@ -6,17 +6,55 @@ from sklearn.utils import class_weight
 from sklearn.model_selection import train_test_split, StratifiedShuffleSplit
 import functools
 import pickle
-
-import keras
-from keras.preprocessing.image import ImageDataGenerator
-from keras.preprocessing.image import load_img, img_to_array
-from keras.utils import to_categorical
-from keras.models import Sequential
-from keras.layers import Activation, Dropout, Flatten, Dense
-from keras import backend as K
-from keras import applications, Model, metrics
-from keras.callbacks import History, TensorBoard, EarlyStopping
+from tensorflow import keras
+from tensorflow.keras.preprocessing.image import ImageDataGenerator
+from tensorflow.keras.preprocessing.image import load_img, img_to_array
+from tensorflow.keras.utils import to_categorical
+from tensorflow.keras.models import Sequential
+from tensorflow.keras.layers import Activation, Dropout, Flatten, Dense
+from tensorflow.keras import backend as K
+from tensorflow.keras import applications, Model, metrics
+from tensorflow.keras.callbacks import History, TensorBoard, EarlyStopping
 import tensorflow as tf
+from tensorflow.keras import losses
+
+
+class CustomTraining():
+
+    def __init__(self, model, batch_size=32,
+                 optimizer=tf.keras.optimizers.RMSprop(learning_rate=0.1),
+                 loss=losses.MeanSquaredError()):
+        self.model = model
+        self.batch_size = batch_size
+        self.optimizer = optimizer
+        self.loss = loss
+
+    def train_epoch(self, X, y):
+        loss_total = 0
+        batches = 0
+        for i, (X_batch, y_batch) in enumerate(zip(X, y)):
+            with tf.GradientTape() as g:
+                g.watch(self.model.weights)
+                y_pred = self.model(X_batch)
+                loss_epoch = self.loss(y_batch, y_pred)
+                grads = g.gradient(loss_epoch, self.model.weights)
+            loss_total = loss_total + loss_epoch.numpy()
+            self.optimizer.apply_gradients(zip(grads, self.model.weights))
+            batches = batches + i
+        return loss_total / batches
+    
+    #@tf.function
+    def fit(self, X, y, epochs=1, verbose=True, each=10, model_params=True):
+        X_ = X.batch(self.batch_size)
+        y_ = y.batch(self.batch_size)
+        for epoch in range(epochs):
+            loss = self.train_epoch(X_, y_)
+            if verbose:
+                if epoch % each == 0:
+                    print("epoch: ", epoch)
+                    print("loss: ", loss)
+                    if model_params:
+                        print("model: ", self.model.weights)
 
 
 class CustomImageGenerator():
@@ -27,6 +65,7 @@ class CustomImageGenerator():
     Optionally, you can pass a list of image names
     and a list of one hot encoded labels.
     """
+
     def __init__(self, image_dir, image_filenames=None, label_list=None,
                  image_gen=ImageDataGenerator(),
                  batch_size=32, target_size=(250, 250)):
@@ -71,7 +110,7 @@ class CustomImageGenerator():
                     x = chunk
                     y = None
                 arr_batch = np.array([self.get_array(image)
-                                    for image in x])
+                                      for image in x])
                 yield self.image_gen.flow(arr_batch, y).next()
 
     def get_array(self, image):
@@ -154,9 +193,9 @@ def create_model(verbose=True):
     img_width, img_height = 250, 250
 
     if K.image_data_format() == 'channels_first':
-            input_shape = (3, img_width, img_height)
+        input_shape = (3, img_width, img_height)
     else:
-            input_shape = (img_width, img_height, 3)
+        input_shape = (img_width, img_height, 3)
 
     # maybe pop some layers with model.layers.pop()
     base_model = applications.VGG16(include_top=False, input_shape=input_shape)
@@ -164,7 +203,7 @@ def create_model(verbose=True):
 
     # freeze all layers except last two
     for layer in base_model.layers[:-2]:
-            layer.trainable = False
+        layer.trainable = False
 
     # model topology
     top_model = Sequential()
@@ -204,9 +243,10 @@ def create_model(verbose=True):
     # print(model.summary())
 
     # create custom metric function
-    top20_acc = functools.partial(keras.metrics.top_k_categorical_accuracy, k=20)
+    top20_acc = functools.partial(
+        keras.metrics.top_k_categorical_accuracy, k=20)
     top20_acc.__name__ = 'top20_acc'
-    
+
     model.compile(loss='categorical_crossentropy', optimizer=keras.optimizers.Adam(lr=0.001),
                   metrics=[metrics.categorical_accuracy, top20_acc])
 
@@ -227,7 +267,7 @@ if __name__ == '__main__':
     list_of_images = np.array([id + '.jpg' for id in df['id'].values])
     print(get_label_dict(df['breed'].values))
     _, _, class_weights = get_label_dict(df['breed'].values)
-    
+
     print("total number of images are {}".format(len(list_of_labelnames)))
 
     # split data sets
@@ -237,7 +277,8 @@ if __name__ == '__main__':
                                                         random_state=42,
                                                         )
     sss = StratifiedShuffleSplit(n_splits=1, random_state=42, test_size=0.2)
-    train_index, test_index = list(sss.split(list_of_images, list_of_labelnames))[0]
+    train_index, test_index = list(
+        sss.split(list_of_images, list_of_labelnames))[0]
     X_train, y_train = list_of_images[train_index], list_of_labelnames[train_index]
     X_test, y_test = list_of_images[test_index], list_of_labelnames[test_index]
 
@@ -269,7 +310,7 @@ if __name__ == '__main__':
     print("Number of training samples: {}".format(nb_train_samples))
     print(nb_validation_samples)
     print(nb_validation_samples // batch_size)
-    
+
     model = create_model()
     print(model.summary())
 
@@ -300,16 +341,16 @@ if __name__ == '__main__':
             validation_data=validation_generator.get_next_batch(),
             validation_steps=nb_validation_samples // batch_size,
             max_queue_size=5,
-            callbacks = [history, tb],
+            callbacks=[history, tb],
             class_weight=class_weights)
 
     # serialize model to JSON
     model_json = model.to_json()
     with open("model_train.json", "w") as json_file:
-            json_file.write(model_json)
-            # serialize weights to HDF5
-            model.save_weights("model_train.h5")
-            print("Saved model to disk")
+        json_file.write(model_json)
+        # serialize weights to HDF5
+        model.save_weights("model_train.h5")
+        print("Saved model to disk")
     # as hdf5
     model.save('model_train.h5')
 
@@ -326,16 +367,16 @@ if __name__ == '__main__':
             steps_per_epoch=nb_train_samples // batch_size,
             epochs=epochs,
             max_queue_size=5,
-            callbacks = [history, tb],
+            callbacks=[history, tb],
             class_weight=class_weights)
 
     # serialize model to JSON
     model_json = model.to_json()
     with open("model_full.json", "w") as json_file:
-            json_file.write(model_json)
-            # serialize weights to HDF5
-            model.save_weights("model_train.h5")
-            print("Saved model to disk")
+        json_file.write(model_json)
+        # serialize weights to HDF5
+        model.save_weights("model_train.h5")
+        print("Saved model to disk")
     # as hdf5
     model.save('model_full.h5')
 

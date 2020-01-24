@@ -31,7 +31,7 @@ import utils as ut
 
 # simple custom generator
 train_data_path = '/home/jodahr/Software/Development/DogBreeds/data/train'
-data_gen = ut.predictGenerator(train_data_path, target_size=(128,128))
+data_gen = ut.predictGenerator(train_data_path, target_size=(128, 128))
 
 # test generator
 plt.imshow(next(data_gen)[0])
@@ -39,9 +39,10 @@ plt.imshow(next(data_gen)[0])
 # randomDim
 random_dim = 100
 
+
 def get_discriminator(optimizer):
     discriminator = Sequential()
-    discriminator.add(Convolution2D(32, (3,3), input_shape=(3, 128, 128)))
+    discriminator.add(Convolution2D(32, (3, 3), input_shape=(3, 128, 128)))
     discriminator.add(Activation('relu'))
     discriminator.add(MaxPooling2D(pool_size=(2, 2)))
 
@@ -53,7 +54,8 @@ def get_discriminator(optimizer):
     discriminator.add(Activation('relu'))
     discriminator.add(MaxPooling2D(pool_size=(2, 2)))
 
-    discriminator.add(Flatten())  # this converts our 3D feature maps to 1D feature vectors
+    # this converts our 3D feature maps to 1D feature vectors
+    discriminator.add(Flatten())
     discriminator.add(Dense(64))
     discriminator.add(Activation('relu'))
     discriminator.add(Dropout(0.5))
@@ -61,38 +63,46 @@ def get_discriminator(optimizer):
     discriminator.add(Activation('sigmoid'))
 
     discriminator.compile(loss='binary_crossentropy',
-                optimizer='rmsprop',
-                metrics=['accuracy'])
+                          optimizer='rmsprop',
+                          metrics=['accuracy'])
 
     return discriminator
 
 # generator vanilla network
+
+
 def get_generator(optimizer):
     generator = Sequential()
     generator.add(Dense(8*8*1024, input_dim=random_dim,
-                         kernel_initializer=initializers.RandomNormal(stddev=0.02)))
+                        kernel_initializer=initializers.RandomNormal(stddev=0.02)))
 
     generator.add(keras.layers.Reshape((8, 8, 1024)))
     generator.add(LeakyReLU(0.2))
-    generator.add(Conv2DTranspose(512, (5,5), strides=[2,2], padding='same',kernel_initializer=initializers.RandomNormal(stddev=0.02)))
+    generator.add(Conv2DTranspose(512, (5, 5), strides=[
+                  2, 2], padding='same', kernel_initializer=initializers.RandomNormal(stddev=0.02)))
     generator.add(keras.layers.BatchNormalization())
     generator.add(LeakyReLU(0.2))
-    generator.add(Conv2DTranspose(256, (5,5), strides=[2,2], padding='same', kernel_initializer=initializers.RandomNormal(stddev=0.02)))
+    generator.add(Conv2DTranspose(256, (5, 5), strides=[
+                  2, 2], padding='same', kernel_initializer=initializers.RandomNormal(stddev=0.02)))
     generator.add(keras.layers.BatchNormalization())
     generator.add(LeakyReLU(0.2))
-    generator.add(Conv2DTranspose(128, (5,5), strides=[2,2], padding='same', kernel_initializer=initializers.RandomNormal(stddev=0.02)))
+    generator.add(Conv2DTranspose(128, (5, 5), strides=[
+                  2, 2], padding='same', kernel_initializer=initializers.RandomNormal(stddev=0.02)))
     generator.add(keras.layers.BatchNormalization())
     generator.add(LeakyReLU(0.2))
-    generator.add(Conv2DTranspose(64, (5,5), strides=[2,2], padding='same', kernel_initializer=initializers.RandomNormal(stddev=0.02)))
+    generator.add(Conv2DTranspose(64, (5, 5), strides=[
+                  2, 2], padding='same', kernel_initializer=initializers.RandomNormal(stddev=0.02)))
     generator.add(keras.layers.BatchNormalization())
     generator.add(LeakyReLU(0.2))
-    generator.add(Conv2DTranspose(3, (5,5), strides=[1,1], padding='same', kernel_initializer=initializers.RandomNormal(stddev=0.02)))
+    generator.add(Conv2DTranspose(3, (5, 5), strides=[
+                  1, 1], padding='same', kernel_initializer=initializers.RandomNormal(stddev=0.02)))
     generator.add(keras.layers.BatchNormalization())
     generator.add(LeakyReLU(0.2))
     generator.add(Activation('tanh'))
 
     generator.compile(loss='binary_crossentropy', optimizer='adam')
     return generator
+
 
 gan_input = keras.engine.input_layer.Input(batch_shape=(random_dim,))
 gan_input
