@@ -2,6 +2,8 @@ import tensorflow as tf
 from tensorflow import keras
 from tensorflow.keras import layers, losses
 import numpy as np
+from matplotlib import pyplot as plt
+
 
 def create_discriminator():
 
@@ -12,6 +14,7 @@ def create_discriminator():
     # convs
     model.add(layers.Conv2D(filters=32, kernel_size=(4,4),
               activation="relu", input_shape=(28,28,1)))
+    model.add(layers.Dropout(0.2))
     model.add(layers.MaxPool2D(pool_size=(2,2)))
     model.add(layers.Conv2D(filters=32, kernel_size=(2,2),
               activation="relu"))
@@ -22,6 +25,7 @@ def create_discriminator():
 
     # classification
     model.add(layers.Dense(10, activation="relu"))
+    model.add(layers.Dropout(0.2))
 
     # final dense layer
     model.add(layers.Dense(units=1,activation="sigmoid"))
@@ -36,25 +40,22 @@ def create_generator():
     model = keras.Sequential(name="generator")
 
     model.add(layers.Dense(100, input_shape=(100,), activation="relu"))
+    model.add(layers.Dropout(0.2))
     model.add(layers.Reshape(target_shape=(10,10,1)))
 
-    model.add(layers.Conv2DTranspose(filters=5,
+    model.add(layers.Conv2DTranspose(filters=12,
                                       kernel_size=(3,3), strides=(2,2)))
+    model.add(layers.Dropout(0.2))
 
-    model.add(layers.Conv2DTranspose(filters=5,
+    model.add(layers.Conv2DTranspose(filters=12,
                                       kernel_size=(3,3), strides=(1,1)))
+    model.add(layers.Dropout(0.2))
 
     model.add(layers.Conv2DTranspose(filters=1,
                                       kernel_size=(6,6), strides=(1,1)))
 
     return model
 
-
-generator = create_generator()
-generator.summary()
-
-discriminator = create_discriminator()
-discriminator.summary()
 
 class GAN():
 
@@ -125,6 +126,7 @@ class GAN():
         for epoch in range(epochs):
             loss_total = self.train_discriminator_step(X_real)
             print(loss_total)
+        return loss_total
 
     def train_generator_step(self, train_dataset):
 
@@ -144,23 +146,47 @@ class GAN():
     def fit_generator(self, n_size=100, epochs=10):
 
                 # create fake images fake
-        y_fake = np.repeat(1.0, n_size)
-        noise_vectors = self.__noise__(n_features=100, size=n_size)
-
-        # create dataset
-        train_dataset = tf.data.Dataset.from_tensor_slices((noise_vectors,y_fake))
-        train_dataset = train_dataset.batch(self.batch_size)
 
 
         for epoch in range(epochs):
+            y_fake = np.repeat(1.0, n_size)
+            noise_vectors = self.__noise__(n_features=100, size=n_size)
+
+            # create dataset
+            train_dataset = tf.data.Dataset.from_tensor_slices((noise_vectors,y_fake))
+            train_dataset = train_dataset.batch(self.batch_size)
+
             loss_total = self.train_generator_step(train_dataset)
             print(loss_total)
             #print(self.generator.weights)
+        return loss_total
+
+    def fit(self, X_real, n_size, epochs=1):
+        for epoch in range(epochs):
+            print("epoch: ", epoch)
+            loss_d = self.fit_discriminator(X_real, epochs=1)
+            loss_g = self.fit_generator(n_size=n_size, epochs=1)
+            print("loss: ", loss_d + loss_g)
+
+
+
+    def show_image(self, X_fake):
+        img_array = X_fake.reshape(28,28)
+        plt.imshow(img_array, cmap='gray_r')
+        plt.axis('off')
+
+generator = create_generator()
+generator.summary()
+
+discriminator = create_discriminator()
+discriminator.summary()
 
 
 # init model
 gan = GAN(discriminator=discriminator,
-    generator=generator, generator_opt=tf.keras.optimizers.Adam(learning_rate=0.1))
+    generator=generator, generator_opt=tf.keras.optimizers.Adam(learning_rate=0.0001),
+    discriminator_opt=tf.keras.optimizers.Adam(learning_rate=0.001),
+    batch_size=128)
 
 # test generator
 noise_vector = gan.__noise__(100)
@@ -192,5 +218,6 @@ y_preds = gan.generator_predict(noise_vectors)
 
 gan.discriminator(y_preds)
 
+gan.show_image(y_preds[5].numpy())
 
-
+gan.fit(X_train_s[:5000], n_size=1000, epochs=10)
